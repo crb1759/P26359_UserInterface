@@ -7,7 +7,6 @@
 
 import src_ui as SU
 
-
 def main():
     SU.start()
 
