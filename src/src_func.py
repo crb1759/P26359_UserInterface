@@ -11,6 +11,7 @@
 
 import serial
 import time
+import math
 
 # -------------------------------------------------
 #               LOCAL IMPORTS
@@ -44,7 +45,6 @@ _uart = None
 
 
 def get_uart():
-
     global _uart
 
     if _uart is None:
@@ -60,7 +60,7 @@ def get_uart():
 
     else:
         print(f"UART Communication Not Initialized")
-        return ConnectionError
+
 
 def send_uart_message(message: str):
     try:
@@ -71,14 +71,35 @@ def send_uart_message(message: str):
         print(f"UART send failed: {e}")
 
 
-def send_effect(effect: int):
-    send_uart_message(f"E={effect}")
+def send_effect(layer: int, effect: int):
+    if layer == 1:
+        send_uart_message(f'E={effect}')
+    elif layer == 2:
+        send_uart_message(f'E2={effect}')
+    elif layer == 3:
+        send_uart_message(f'E3={effect}')
 
 
-def send_brightness(percent: int):
-    # map 0..100 UI brightness to 0..255 for ESP32
+def send_brightness(layer: int, percent: int):
     value_255 = max(0, min(255, int(percent * 255 / 100)))
-    send_uart_message(f"B={value_255}")
+
+    if layer == 1:
+        send_uart_message(f'B={value_255}')
+    elif layer == 2:
+        send_uart_message(f'B2={value_255}')
+    elif layer == 3:
+        send_uart_message(f'B3={value_255}')
+
+
+def disable_layer(layer: int):
+    if layer == 2:
+        send_uart_message('X2=1')
+    elif layer == 3:
+        send_uart_message('X3=1')
+
+
+def send_override(enabled: bool):
+    send_uart_message('OVR=1' if enabled else 'OVR=0')
 
 
 def hex_to_hue(hex_color: str) -> int:
@@ -113,3 +134,49 @@ def send_frequency(freq: float):
     if freq < 0:
         return
     send_uart_message(f"F={freq:.2f}")
+
+
+def _hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
+    """Convert '#RRGGBB' or 'RRGGBB' to an (r, g, b) int tuple."""
+    h = hex_color.lstrip("#")
+    return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+
+
+# -------------------------------------------------
+# NEAREST-COLOR LOOKUP
+# Uses perceptual (weighted Euclidean) distance in RGB space.
+# Weights approximate human eye sensitivity: G > R > B.
+# -------------------------------------------------
+
+def snap_to_ws2812(hex_color: str) -> tuple[str, str]:
+    """
+    Given any arbitrary hex color, return the closest WS2812
+    obtainable color as a (name, hex) tuple.
+
+    Example
+    -------
+    >>> snap_to_ws2812("#FE0102")
+    ('Red', '#FF0000')
+    """
+    r1, g1, b1 = _hex_to_rgb(hex_color)
+
+    best_name = ""
+    best_hex = ""
+    best_dist = math.inf
+
+    for name, ref_hex in SP.WS281_COLORS.items():
+        r2, g2, b2 = _hex_to_rgb(ref_hex)
+
+        # Weighted Euclidean distance (perceptual approximation)
+        dist = math.sqrt(
+            2.0 * (r1 - r2) ** 2 +
+            4.0 * (g1 - g2) ** 2 +
+            3.0 * (b1 - b2) ** 2
+        )
+
+        if dist < best_dist:
+            best_dist = dist
+            best_name = name
+            best_hex = ref_hex
+
+    return best_name, best_hex

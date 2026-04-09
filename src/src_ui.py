@@ -6,8 +6,11 @@
 # ----------------------------------------------------------------
 
 from nicegui import ui
+
 import src_params as SP
 import src_func as SF
+
+import webcolors
 
 # -------------------------------------------------
 # GLOBAL DATA
@@ -17,16 +20,20 @@ rainbow = SF.generate_rainbow_colors(SP.NUM_BANDS)
 
 bands = [
     {
-        "min_freq": i * 20 + 1,
-        "max_freq": (i + 1) * 20,
+        "min_freq": i * SP.BAND_STEP,
+        "max_freq": (i + 1) * SP.BAND_STEP,
         "intensity": 50,
         "color": rainbow[i],
     }
     for i in range(SP.NUM_BANDS)
 ]
 
+band_step = SP.MAX_FREQ / SP.NUM_BANDS
+
 color_buttons = []
 range_sliders = []
+
+manual_color: str = SP.WS281_COLORS["Teal"]
 
 
 # -------------------------------------------------
@@ -46,6 +53,7 @@ def show_manual():
 # -------------------------------------------------
 # LOGIC FUNCTIONS
 # -------------------------------------------------
+
 
 def check_overlap():
     active_ranges = []
@@ -68,7 +76,7 @@ def check_overlap():
             b_min, b_max = active_ranges[j]
 
             if a_min < b_max and b_min < a_max:
-                error_label.set_text("⚠ Frequency ranges overlap!")
+                error_label.set_text("⚠ Frequency Ranges Overlap! ⚠")
                 error_label.classes(remove="hidden")
                 return
 
@@ -85,11 +93,68 @@ def update_cube_colors():
         ui.run_javascript(f"""
             const face = document.getElementById('cube_{faces[i]}');
             if (face) {{
-                face.style.background = '{color}33';
+                face.style.background = '{color}';
                 face.style.border = '2px solid {color}';
                 face.style.boxShadow = '0 0 20px {color}';
             }}
         """)
+
+    colors = [band["color"] for band in bands]
+    ui.run_javascript(f"""
+        if (typeof window.freqPreviewInterval !== 'undefined') {{
+            window.freqPreviewColors = {str(colors)};
+        }}
+    """)
+
+
+def _start_frequency_preview():
+
+    colors = [band["color"] for band in bands]
+    colors_js = str(colors)
+
+    ui.run_javascript(f"""
+        window.freqPreviewColors = {colors_js};
+        window.freqPreviewIndex  = 0;
+ 
+        clearInterval(window.freqPreviewInterval);
+ 
+        function _applyFreqColor(hex) {{
+            const border = hex;
+            const fill   = hex + '33';
+            document.querySelectorAll('.face').forEach(face => {{
+                face.style.border    = '2px solid ' + border;
+                face.style.boxShadow = '0 0 20px '  + border;
+                face.style.background = fill;
+            }});
+        }}
+ 
+        // Cross-fade by incrementing hue smoothly toward target
+        // We swap color every 1.2 s with a CSS transition on the face
+        document.querySelectorAll('.face').forEach(face => {{
+            face.style.transition = 'border-color 0.8s ease, box-shadow 0.8s ease, background 0.8s ease';
+        }});
+ 
+        _applyFreqColor(window.freqPreviewColors[0]);
+ 
+        window.freqPreviewInterval = setInterval(() => {{
+            window.freqPreviewIndex = (window.freqPreviewIndex + 1) % window.freqPreviewColors.length;
+            _applyFreqColor(window.freqPreviewColors[window.freqPreviewIndex]);
+        }}, 1200);
+    """)
+
+
+def stop_frequency_preview():
+    ui.run_javascript("""
+        clearInterval(window.freqPreviewInterval);
+        document.querySelectorAll('.face').forEach(face => {
+            face.style.transition = '';
+        });
+    """)
+
+
+# -------------------------------------------------
+#               LED CONTROL FUNCTIONS
+# -------------------------------------------------
 
 
 def update_color(index, value):
@@ -101,10 +166,6 @@ def update_color(index, value):
     SF.send_hues_from_hex_list(selected)
 
 
-# -------------------------------------------------
-#               LED CONTROL FUNCTIONS
-# -------------------------------------------------
-
 def update_brightness(value):
     brightness_label.set_text(f"Brightness: {value}%")
     brightness_factor = value / 100
@@ -112,6 +173,7 @@ def update_brightness(value):
     # Send Command(s) to ESP32
     SF.send_brightness(int(value))
 
+    # Update Cube Rendering
     ui.run_javascript(f"""
         const faces = document.querySelectorAll('.face');
         faces.forEach(face => {{
@@ -122,9 +184,10 @@ def update_brightness(value):
 
 def start_flash():
     # Send Command(s) to ESP32
-    SF.send_effect(2)
+    SF.send_effect(SP.FLASH_CMD)
     SF.send_speed(250)
 
+    # Update Cube Rendering
     ui.run_javascript("""
         window.ledInterval && clearInterval(window.ledInterval);
 
@@ -144,9 +207,10 @@ def start_flash():
 
 def start_strobe():
     # Send Command(s) to ESP32
-    SF.send_effect(0)
+    SF.send_effect(SP.STROBE_CMD)
     SF.send_speed(100)
 
+    # Update Cube Rendering
     ui.run_javascript("""
         window.ledInterval && clearInterval(window.ledInterval);
 
@@ -164,9 +228,10 @@ def start_strobe():
 
 def start_fade():
     # Send Command(s) to ESP32
-    SF.send_effect(1)
+    SF.send_effect(SP.FADE_CMD)
     SF.send_speed(30)
 
+    # Update Cube Rendering
     ui.run_javascript("""
         window.ledInterval && clearInterval(window.ledInterval);
 
@@ -188,9 +253,10 @@ def start_fade():
 
 def start_smooth():
     # Send Command(s) to ESP32
-    SF.send_effect(3)
+    SF.send_effect(SP.SMOOTH_CMD)
     SF.send_speed(18)
 
+    # Update Cube Rendering
     ui.run_javascript("""
         window.ledInterval && clearInterval(window.ledInterval);
 
@@ -211,68 +277,82 @@ def start_smooth():
 
 
 def start_snake():
-    ui.run_javascript("""
+
+    color = manual_color
+
+    r = int(color[1:3], 16)
+    g = int(color[3:5], 16)
+    b = int(color[5:7], 16)
+
+    # Update Cube Rendering
+    ui.run_javascript(f"""
         window.ledInterval && clearInterval(window.ledInterval);
-
+ 
         const face = document.getElementById('cube_front');
-
+ 
         let t = 0;
         const size = 300;
-
-        window.ledInterval = setInterval(() => {
-
+        const r = {r}, g = {g}, b = {b};
+        const solidColor  = `rgb(${{r}},${{g}},${{b}})`;
+        const glowColor   = `rgba(${{r}},${{g}},${{b}},0.2)`;
+ 
+        window.ledInterval = setInterval(() => {{
+ 
             const perimeter = 4 * size;
             let pos = (t % perimeter);
-
+ 
             let x = 0;
             let y = 0;
-
-            if (pos < size) {
+ 
+            if (pos < size) {{
                 x = pos;
                 y = 0;
-            } else if (pos < 2 * size) {
+            }} else if (pos < 2 * size) {{
                 x = size;
                 y = pos - size;
-            } else if (pos < 3 * size) {
+            }} else if (pos < 3 * size) {{
                 x = size - (pos - 2 * size);
                 y = size;
-            } else {
+            }} else {{
                 x = 0;
                 y = size - (pos - 3 * size);
-            }
-
+            }}
+ 
             face.style.background = `
-                radial-gradient(circle at ${x}px ${y}px,
-                #00ff00 0%,
-                #00ff00 5%,
-                rgba(0,255,0,0.2) 15%,
+                radial-gradient(circle at ${{x}}px ${{y}}px,
+                ${{solidColor}} 0%,
+                ${{solidColor}} 5%,
+                ${{glowColor}} 15%,
                 transparent 30%)
             `;
-
+ 
             face.style.backgroundColor = "rgba(0,0,0,0.1)";
-
+ 
             t += 8;
-
-        }, 30);
+ 
+        }}, 30);
     """)
 
 
 def stop_effects():
+
+    # Update Cube Rendering
     ui.run_javascript("""
         clearInterval(window.ledInterval);
+        window.snakeRunning = false;
         
         const face = document.getElementById('cube_front');
-
+ 
         if (face) {
             // Remove radial glow
             face.style.background = '';
             face.style.backgroundColor = '';
-
+ 
             // Reset to default cube styling
             face.style.border = '';
             face.style.boxShadow = '';
         }
-
+ 
         // Also reset all faces in case other effects were active
         document.querySelectorAll('.face').forEach(f => {
             f.style.background = '';
@@ -284,10 +364,28 @@ def stop_effects():
     """)
 
 
+
+
 def set_all_faces_color(color):
+
+    global manual_color
+
+    manual_color = color
+
     for band in bands:
         band["color"] = color
+
     update_cube_colors()
+
+    r = int(color[1:3], 16)
+    g = int(color[3:5], 16)
+    b = int(color[5:7], 16)
+
+    ui.run_javascript(f"""
+        if (window.snakeRunning) {{
+            window.snakeColor = {{ r: {r}, g: {g}, b: {b} }};
+        }}
+    """)
 
     # Send Command(s) to ESP32
     SF.send_hues_from_hex_list([color])
@@ -299,12 +397,17 @@ def set_all_faces_color(color):
 
 ui.add_head_html("""
 <style>
-body {
+html, body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
     background-color: #1E1E1E;
 }
 
 .infinity-title {
-    font-size: 4rem;
+    font-size: 2rem;
     font-weight: 700;
     font-family: "Orbitron", "Segoe UI", sans-serif;
     animation: colorFlicker 4s infinite linear;
@@ -317,6 +420,11 @@ body {
     66% { color: #0000ff; }
     100% { color: #ff0000; }
 }
+
+{
+    box-sizing: border-box;
+}
+
 </style>
 """)
 
@@ -324,7 +432,7 @@ body {
 # MAIN LAYOUT
 # -------------------------------------------------
 
-with ui.column().classes("w-full h-screen p-6 gap-6"):
+with ui.column().classes("w-[1024px] h-[600px] mx-auto gap-2"):
     ui.label("∞ Infinity Cube ∞").classes("infinity-title w-full text-center")
     ui.separator()
 
@@ -337,12 +445,12 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
     # MAIN SPLIT (ALWAYS VISIBLE)
     # -------------------------------------------------
 
-    with ui.row().classes("w-full h-[70vh] no-wrap gap-6"):
+    with ui.row().classes("w-full flex-1 no-wrap gap-2"):
 
         # =========================
         # LEFT SIDE (SWAPS)
         # =========================
-        with ui.column().classes("w-1/2 h-full overflow-auto gap-4"):
+        with ui.column().classes("w-1/2 h-full gap-2"):
 
             frequency_page = ui.column().classes("w-full")
             manual_page = ui.column().classes("w-full hidden")
@@ -362,22 +470,23 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
 
                         slider = ui.range(
                             min=0,
-                            max=240,
-                            value=[
-                                bands[i]["min_freq"],
-                                bands[i]["max_freq"],
-                            ],
+                            max=round(SP.MAX_FREQ),
+                            value={
+                                "min": bands[i]["min_freq"],
+                                "max": bands[i]["max_freq"],
+                            },
                         ).classes("flex-1")
 
                         value_label = ui.label(
-                            f"{bands[i]['min_freq']} - {bands[i]['max_freq']} Hz"
+                            f"{round(bands[i]['min_freq'])} - {round(bands[i]['max_freq'])} Hz"
                         ).classes("w-24 text-right text-gray-300")
 
 
                         def update_range(e, i=i, label=value_label):
-                            min_val, max_val = slider.value
-                            bands[i]["min_freq"] = min_val
-                            bands[i]["max_freq"] = max_val
+                            min_val = e.value["min"]
+                            max_val = e.value["max"]
+                            bands[i]["min_freq"] = round(min_val)
+                            bands[i]["max_freq"] = round(max_val)
                             label.set_text(f"{min_val} - {max_val} Hz")
                             check_overlap()
 
@@ -390,30 +499,40 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
 
                         slider.on_value_change(update_range)
 
-                        color_btn = ui.button().props("flat")
-                        color_btn.classes("w-8 h-8 p-0 rounded")
-                        color_btn.style(
-                            f"background-color: {bands[i]['color']}; border: 1px solid #888;"
-                        )
 
-                        with ui.menu().props('anchor="bottom left" self="top left"') as menu:
-                            with ui.card().classes("bg-gray-900 p-2"):
-                                picker = ui.color_picker(
-                                    value=bands[i]["color"]
-                                ).props("format=hex flat")
+                        def _make_color_picker(band_index: int, initial_color: str):
+                            btn = ui.button().props("flat").classes("w-8 h-8 p-0 rounded")
+                            btn.style(f"background-color: {initial_color}; border: 1px solid #888;")
+
+                            input_id = f"color_input_{band_index}"
+
+                            ui.html(f"""
+                                <input type="color" id="{input_id}" value="{initial_color}"
+                                    style="position:absolute;width:0;height:0;opacity:0;pointer-events:none;">
+                            """)
+
+                            def _on_change(e, idx=band_index, _btn=btn, _id=input_id):
+                                hex_val = e.args
+                                if not hex_val or not str(hex_val).startswith("#"):
+                                    return
+                                _name, snapped = SF.snap_to_ws2812(str(hex_val))
+                                update_color(idx, snapped)
+                                _btn.style(f"background-color: {snapped}; border: 1px solid #888;")
+
+                            btn.on("click", lambda _id=input_id: ui.run_javascript(f"""
+                                (function() {{
+                                    const inp = document.getElementById('{_id}');
+                                    inp.oninput = (ev) => {{
+                                        emitEvent('color_changed_{_id}', ev.target.value);
+                                    }};
+                                    inp.click();
+                                }})();
+                            """))
+
+                            ui.on(f"color_changed_{input_id}", _on_change)
 
 
-                                def apply_color(e, i=i):
-                                    update_color(i, e.value)
-                                    color_btn.style(
-                                        f"background-color: {e.value}; border: 1px solid #888;"
-                                    )
-                                    menu.close()
-
-
-                                picker.on_value_change(apply_color)
-
-                        color_btn.on("click", menu.open)
+                        _make_color_picker(i, bands[i]["color"])
 
             # -------- MANUAL PAGE --------
             with manual_page:
@@ -424,10 +543,10 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
 
                 # --- COLOR GRID ---
                 colors = [
-                    "#FF0000", "#00FF00", "#0000FF",
-                    "#FFFF00", "#FF00FF", "#00FFFF",
-                    "#FFFFFF", "#FFA500", "#800080",
-                    "#00FF7F", "#1E90FF", "#FF1493"
+                    SP.WS281_COLORS["Red"], SP.WS281_COLORS["Green"], SP.WS281_COLORS["Blue"],
+                    SP.WS281_COLORS["Yellow"], SP.WS281_COLORS["Lavender"], SP.WS281_COLORS["Teal"],
+                    SP.WS281_COLORS["White"], SP.WS281_COLORS["Orange"], SP.WS281_COLORS["Purple"],
+                    SP.WS281_COLORS["Mint"], SP.WS281_COLORS["Dodger Blue"], SP.WS281_COLORS["Raspberry"]
                 ]
 
                 with ui.grid(columns=4).classes("gap-x-3 gap-y-18 w-72 mx-auto"):
@@ -450,7 +569,7 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
                 ui.separator()
 
                 # --- EFFECT BUTTONS ---
-                with ui.row().classes("gap-x-3 gap-y-18 w-72 mx-auto"):
+                with ui.row().classes("gap-x-3 gap-y-1 w-72 mx-auto"):
                     ui.button("Flash").on("click", start_flash)
                     ui.button("Strobe").on("click", start_strobe)
                     ui.button("Fade").on("click", start_fade)
@@ -461,7 +580,7 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
         # =========================
         # RIGHT SIDE CUBE
         # =========================
-        with ui.column().classes("w-1/2 h-full flex items-center justify-center"):
+        with ui.column().classes("w-1/2 h-full items-center justify-center").style("min-height: 400px; position: relative;"):
 
             ui.html("""
             <div class="scene">
@@ -497,7 +616,8 @@ with ui.column().classes("w-full h-screen p-6 gap-6"):
                 background: rgba(0,255,255,0.05);
                 border: 2px solid cyan;
                 box-shadow: 0 0 20px cyan;
-            
+                filter: brightness(0.5);
+                
                 display: flex;
                 align-items: center;
                 justify-content: center;
