@@ -1,6 +1,6 @@
 # ----------------------------------------------------------------
-# File: src_ui.py
-# Function: Industrial Control UI Layout with 3D Cube and Mapping Table
+# File: params.py
+# Function: Helper File for Various Parameters Used Throughout Program
 # Author: Connor Bastian, crb1759@rit.edu
 # Date: February 12, 2026
 # ----------------------------------------------------------------
@@ -14,6 +14,10 @@ MAX_FREQ = 1000
 
 BAND_STEP = int(MAX_FREQ) / int(NUM_BANDS)
 
+INIT_CUBE_BRIGHTNESS_PERCENT = 50
+
+EFFECT_COLOR_LIMIT = 5
+
 # -------------------------------------------------
 #               UART VARIABLES
 # -------------------------------------------------
@@ -24,7 +28,11 @@ DATA_BITS = 8
 PARITY = 'N'
 STOP_BITS = 1
 
-# LED UART Control Variables and Corresponding Effects
+ERROR_FLAG = False
+
+# -------------------------------------------------
+#              LED CONTROL VARIABLES
+# -------------------------------------------------
 
 # -------------------------------------------------
 # Example of Command That Can be Sent:
