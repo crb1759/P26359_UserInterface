@@ -2,9 +2,13 @@
     File: src_ui.py
     Function: Industrial Control UI Layout with 3D Cube and Mapping Table
     Author: Connor Bastian, crb1759@rit.edu
-    Date: February 12, 2026
+    Date: April 25, 2026
 ------------------------------------------------------------------
 
-February 12th, 2026
+April 25th, 2026
 
-    - Started New Project Based Off Old Tester Code
+    - Used First Iteration of Project at ImagineRIT
+        - Missing Communication Functionality
+        - Missing Frequency Color Swatch Functionality
+        - Currently Send Center of Frequency Range Since ESP
+          Code was Not Programmed to Receive Yet

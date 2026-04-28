@@ -9,26 +9,40 @@
 #           USER INTERFACE VARIABLES
 # -------------------------------------------------
 
+# Number of frequency bands displayed in UI
 NUM_BANDS = 6
-MAX_FREQ = 1000
 
+# Maximum frequency value (Hz)
+MAX_FREQ = 20
+
+# Step size for dividing frequency bands evenly
 BAND_STEP = int(MAX_FREQ) / int(NUM_BANDS)
 
+# Default brightness percentage on startup
 INIT_CUBE_BRIGHTNESS_PERCENT = 50
 
+# Maximum number of colors allowed in multi-color effects
 EFFECT_COLOR_LIMIT = 5
+
 
 # -------------------------------------------------
 #               UART VARIABLES
 # -------------------------------------------------
 
+# Serial port used for communication (Raspberry Pi UART)
 SERIAL_PORT = "dev/serial0"
+
+# UART baud rate
 BAUD_RATE = 115200
+
+# UART configuration (currently informational unless used elsewhere)
 DATA_BITS = 8
 PARITY = 'N'
 STOP_BITS = 1
 
+# General-purpose error flag (can be used across modules)
 ERROR_FLAG = False
+
 
 # -------------------------------------------------
 #              LED CONTROL VARIABLES
@@ -37,15 +51,16 @@ ERROR_FLAG = False
 # -------------------------------------------------
 # Example of Command That Can be Sent:
 # E=5,N=3,H=20,80,140,B=180,F=440,S=25
-
-# E=5 (Chase Effect),
-# N=3 (# of Active Colors),
-# H=20,80,140 (Hue List),
-# B=180 (Brightness Value),
-# F=440 (Frequency Value),
-# S=25 (Speed Value)
+#
+# E=5   → Effect ID (e.g., Chase)
+# N=3   → Number of active colors
+# H=... → Hue values (0–255 each)
+# B=180 → Brightness (0–255)
+# F=440 → Frequency (Hz)
+# S=25  → Speed (ms or device-defined units)
 # -------------------------------------------------
 
+# Effect command IDs (must match microcontroller firmware)
 STROBE_CMD = 0
 FADE_CMD = 1
 FLASH_CMD = 2
@@ -53,13 +68,12 @@ SMOOTH_CMD = 3
 RAINBOW_CMD = 4
 CHASE_CMD = 5
 
+# Valid ranges (can be used for validation if needed)
 COLOR_RANGE = range(1, 5)
-
 HUE_RANGE = range(1, 5)
-
 BRIGHTNESS_RANGE = range(0, 255)
-
 SPEED_RANGE = range(1, 1000)
+
 
 # -------------------------------------------------
 # WS281 OBTAINABLE COLOR PALETTE
@@ -67,6 +81,8 @@ SPEED_RANGE = range(1, 1000)
 # Value : hex string (#RRGGBB, uppercase)
 # -------------------------------------------------
 
+# Predefined color set optimized for WS2812 LEDs
+# Used for snapping arbitrary colors to hardware-supported values
 WS281_COLORS: dict[str, str] = {
 
     # ── Reds ──────────────────────────────────────
@@ -98,7 +114,7 @@ WS281_COLORS: dict[str, str] = {
 
     # ── Greens ────────────────────────────────────
     "Green":                "#00FF00",
-    "Lime":                 "#00FF00",
+    "Lime":                 "#00FF00",  # Duplicate intentionally (alias)
     "Dark Green":           "#006400",
     "Forest Green":         "#228B22",
     "Medium Green":         "#00C800",
@@ -115,7 +131,7 @@ WS281_COLORS: dict[str, str] = {
 
     # ── Cyans ─────────────────────────────────────
     "Cyan":                 "#00FFFF",
-    "Aqua":                 "#00FFFF",
+    "Aqua":                 "#00FFFF",  # Alias
     "Dark Cyan":            "#008B8B",
     "Teal":                 "#008080",
     "Light Cyan":           "#80FFFF",
@@ -150,7 +166,7 @@ WS281_COLORS: dict[str, str] = {
     "Purple":               "#800080",
     "Dark Purple":          "#4B0082",
     "Medium Purple":        "#9370DB",
-    "Indigo":               "#4B0082",
+    "Indigo":               "#4B0082",  # Alias
     "Dark Violet":          "#9400D3",
     "Dark Orchid":          "#9932CC",
     "Medium Orchid":        "#BA55D3",
@@ -161,7 +177,7 @@ WS281_COLORS: dict[str, str] = {
 
     # ── Magentas & Pinks ──────────────────────────
     "Magenta":              "#FF00FF",
-    "Fuchsia":              "#FF00FF",
+    "Fuchsia":              "#FF00FF",  # Alias
     "Dark Magenta":         "#8B008B",
     "Hot Pink":             "#FF69B4",
     "Deep Pink":            "#FF1493",
